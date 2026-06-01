@@ -37,36 +37,57 @@ const CONTENT_SCRIPT = `
     return p === '/' || p === '';
   }
 
-  function getStoriesBottom() {
-    var candidates = [
-      document.querySelector('[aria-label="Stories"]'),
-      document.querySelector('[aria-label="Histoires"]'),
-      document.querySelector('[role="banner"] ~ div'),
-      document.querySelector('header + div'),
-    ];
-    for (var i = 0; i < candidates.length; i++) {
-      if (candidates[i]) {
-        var b = candidates[i].getBoundingClientRect().bottom;
-        if (b > 60) return b;
-      }
+  var cachedFeedTop = null;
+
+  function getNavBottom() {
+    var nav = document.querySelector('nav') || document.querySelector('[role="tablist"]');
+    if (nav) {
+      var rect = nav.getBoundingClientRect();
+      if (rect.top > window.innerHeight * 0.5) return Math.round(window.innerHeight - rect.top);
     }
-    return 210;
+    return 56;
   }
 
-  function getNavHeight() {
-    var nav = document.querySelector('nav') || document.querySelector('[role="tablist"]');
-    return nav ? nav.offsetHeight : 56;
+  function findStoriesStrip() {
+    var divs = document.querySelectorAll('div');
+    for (var i = 0; i < divs.length; i++) {
+      var d = divs[i];
+      var r = d.getBoundingClientRect();
+      if (r.top < 300 && r.bottom > 60 && d.scrollWidth > window.innerWidth + 10) return d;
+    }
+    return null;
   }
 
   function applyFeedBlock() {
     if (!isHomeFeed()) return;
-    document.querySelectorAll('article').forEach(function(el) {
-      el.style.setProperty('display', 'none', 'important');
+
+    var storiesStrip = findStoriesStrip();
+    if (storiesStrip) {
+      var r = storiesStrip.getBoundingClientRect();
+      if (r.bottom > 60 && r.bottom < window.innerHeight * 0.6) {
+        cachedFeedTop = Math.round(r.bottom) + 4;
+      }
+    }
+
+    // Hide articles and their non-stories siblings (e.g. "Vous êtes à jour")
+    document.querySelectorAll('article').forEach(function(a) {
+      a.style.setProperty('display', 'none', 'important');
+      var p = a.parentElement;
+      if (!p) return;
+      Array.from(p.children).forEach(function(c) {
+        if (c.tagName === 'ARTICLE') return;
+        if (c.id === FEED_BLOCKER_ID) return;
+        if (storiesStrip && c.contains(storiesStrip)) return;
+        if (c.getAttribute('data-nofeed-hidden')) return;
+        c.setAttribute('data-nofeed-hidden', '1');
+        c.style.setProperty('display', 'none', 'important');
+      });
     });
+
     document.documentElement.style.setProperty('overflow-y', 'hidden', 'important');
 
-    var top = Math.round(getStoriesBottom());
-    var bottom = getNavHeight();
+    var feedTop = cachedFeedTop || 220;
+    var navBottom = getNavBottom();
 
     var overlay = document.getElementById(FEED_BLOCKER_ID);
     if (!overlay) {
@@ -90,10 +111,10 @@ const CONTENT_SCRIPT = `
     overlay.style.cssText = [
       'position:fixed',
       'left:0', 'right:0',
-      'top:' + top + 'px',
-      'bottom:' + bottom + 'px',
-      'background:#ffffff',
-      'z-index:9998',
+      'top:' + feedTop + 'px',
+      'bottom:' + navBottom + 'px',
+      'background:#fff',
+      'z-index:2147483647',
       'display:flex',
       'align-items:center',
       'justify-content:center',
@@ -105,8 +126,13 @@ const CONTENT_SCRIPT = `
   }
 
   function removeFeedBlock() {
+    cachedFeedTop = null;
     var el = document.getElementById(FEED_BLOCKER_ID);
     if (el) el.remove();
+    document.querySelectorAll('[data-nofeed-hidden]').forEach(function(el) {
+      el.style.removeProperty('display');
+      el.removeAttribute('data-nofeed-hidden');
+    });
     document.querySelectorAll('article').forEach(function(el) {
       el.style.removeProperty('display');
     });
