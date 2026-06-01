@@ -8,6 +8,11 @@ const CONTENT_SCRIPT = `
   if (window.__NOREELS__) return;
   window.__NOREELS__ = true;
 
+  function dbg(msg) {
+    if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'dbg', msg: msg }));
+  }
+  dbg('SCRIPT_INIT path=' + window.location.pathname);
+
   var BLOCKER_ID = 'reel-blocker-overlay';
   var FEED_BLOCKER_ID = 'feed-focus-overlay';
   var FEED_CONTENT_ID = 'feed-focus-content';
@@ -42,6 +47,17 @@ const CONTENT_SCRIPT = `
   var cachedFeedTop = null;
   var lastSentDark = null;
   var reelsIconPos = null;
+
+  function isOnSingleReel() {
+    if (window.location.pathname.indexOf('/reel/') === 0) return true;
+    // DM modal: reel shown as fullscreen overlay without URL change
+    var videos = document.querySelectorAll('video');
+    for (var i = 0; i < videos.length; i++) {
+      var r = videos[i].getBoundingClientRect();
+      if (r.width > window.innerWidth * 0.7 && r.height > window.innerHeight * 0.5) return true;
+    }
+    return false;
+  }
 
   function getNavBottom() {
     var nav = document.querySelector('nav') || document.querySelector('[role="tablist"]');
@@ -262,27 +278,82 @@ const CONTENT_SCRIPT = `
     }
   }, true);
 
-  // --- Patch pushState to catch SPA navigations ---
+  // --- Transparent overlay intercepts swipe gestures on single reel pages ---
+  var REEL_OV_ID = 'reel-swipe-intercept';
+  var _ovStartY = 0, _ovStartX = 0, _ovMoved = false;
+
+  function createReelOverlay() {
+    if (document.getElementById(REEL_OV_ID)) return;
+    if (!document.body) { dbg('OVERLAY_SKIP no body'); return; }
+    dbg('OVERLAY_CREATE path=' + window.location.pathname);
+    var ov = document.createElement('div');
+    ov.id = REEL_OV_ID;
+    ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:2147483646;background:transparent;';
+    ov.addEventListener('touchstart', function(e) {
+      _ovStartY = e.touches[0].clientY;
+      _ovStartX = e.touches[0].clientX;
+      _ovMoved = false;
+      dbg('OV_TOUCHSTART y=' + _ovStartY);
+    }, { passive: true });
+    ov.addEventListener('touchmove', function(e) {
+      var dy = e.touches[0].clientY - _ovStartY;
+      var dx = e.touches[0].clientX - _ovStartX;
+      if (dy * dy > dx * dx && dy * dy > 144) {
+        _ovMoved = true;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        dbg('OV_SWIPE_BLOCKED dy=' + Math.round(dy));
+      }
+    }, { passive: false });
+    ov.addEventListener('touchend', function(e) {
+      if (!_ovMoved) {
+        var t = e.changedTouches[0];
+        ov.style.pointerEvents = 'none';
+        var target = document.elementFromPoint(t.clientX, t.clientY);
+        ov.style.pointerEvents = 'all';
+        if (target) target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: t.clientX, clientY: t.clientY, view: window }));
+      }
+    }, { passive: true });
+    ov.addEventListener('touchcancel', function() { _ovMoved = false; }, { passive: true });
+    document.body.appendChild(ov);
+  }
+
+  function removeReelOverlay() {
+    var el = document.getElementById(REEL_OV_ID);
+    if (el) el.remove();
+  }
+
+  // --- Patch pushState / replaceState to catch SPA navigations ---
   var _push = window.history.pushState;
   window.history.pushState = function() {
     _push.apply(window.history, arguments);
+    tick();
+  };
+  var _replace = window.history.replaceState;
+  window.history.replaceState = function() {
+    _replace.apply(window.history, arguments);
     tick();
   };
   window.addEventListener('popstate', tick);
 
   function tick() {
     setTimeout(function() {
+      dbg('TICK path=' + window.location.pathname + ' singleReel=' + isOnSingleReel() + ' ovExists=' + !!document.getElementById(REEL_OV_ID));
       hideReelsTab();
       if (isReelsFeed()) { showBlocker(); } else { removeBlocker(); }
       if (isHomeFeed() && isLoggedIn()) { applyFeedBlock(); } else { removeFeedBlock(); }
+      if (isOnSingleReel() && !hasActiveDialog()) { createReelOverlay(); } else { removeReelOverlay(); }
     }, 80);
   }
 
   // --- Polling fallback ---
   setInterval(function() {
+    var onReel = isOnSingleReel();
+    dbg('POLL path=' + window.location.pathname + ' onReel=' + onReel + ' ovExists=' + !!document.getElementById(REEL_OV_ID));
     hideReelsTab();
     if (isReelsFeed()) { showBlocker(); } else { removeBlocker(); }
     if (isHomeFeed() && isLoggedIn()) { applyFeedBlock(); } else { removeFeedBlock(); }
+    if (onReel && !hasActiveDialog()) { createReelOverlay(); } else { removeReelOverlay(); }
   }, 600);
 
   tick();
@@ -328,6 +399,8 @@ export default function App() {
               setIsDark(data.dark);
               setStatusBarStyle(data.dark ? 'light' : 'dark', true);
               setStatusBarBackgroundColor(data.dark ? '#0c1014' : '#ffffff', true);
+            } else if (data.type === 'dbg') {
+              console.log('[WebView]', data.msg);
             }
           } catch (_) {}
         }}
