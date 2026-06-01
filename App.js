@@ -91,8 +91,7 @@ const CONTENT_SCRIPT = `
   }
 
   function isLoggedIn() {
-    var nav = document.querySelector('nav') || document.querySelector('[role="tablist"]');
-    return nav !== null;
+    return !!(document.querySelector('nav') || document.querySelector('[role="tablist"]'));
   }
 
   function hasActiveDialog() {
@@ -118,6 +117,9 @@ const CONTENT_SCRIPT = `
         cachedFeedTop = Math.round(r.bottom) + 4;
       }
     }
+
+    // No stories strip and no cached position = interstitial or page still loading — bail out
+    if (!cachedFeedTop) { removeFeedBlock(); return; }
 
     // Hide articles and their non-stories siblings (e.g. "Vous êtes à jour")
     document.querySelectorAll('article').forEach(function(a) {
@@ -272,7 +274,7 @@ const CONTENT_SCRIPT = `
     setTimeout(function() {
       hideReelsTab();
       if (isReelsFeed()) { showBlocker(); } else { removeBlocker(); }
-      if (isHomeFeed()) { applyFeedBlock(); } else { removeFeedBlock(); }
+      if (isHomeFeed() && isLoggedIn()) { applyFeedBlock(); } else { removeFeedBlock(); }
     }, 80);
   }
 
@@ -280,7 +282,7 @@ const CONTENT_SCRIPT = `
   setInterval(function() {
     hideReelsTab();
     if (isReelsFeed()) { showBlocker(); } else { removeBlocker(); }
-    if (isHomeFeed()) { applyFeedBlock(); } else { removeFeedBlock(); }
+    if (isHomeFeed() && isLoggedIn()) { applyFeedBlock(); } else { removeFeedBlock(); }
   }, 600);
 
   tick();
