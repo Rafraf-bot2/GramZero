@@ -4,6 +4,9 @@ on:
   push:
     tags: ['v*']
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -31,8 +34,16 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
+      - name: Find APK
+        run: find android/app/build/outputs/apk -name "*.apk" | tee apk_path.txt
+
+      - name: Rename APK
+        run: |
+          APK=$(cat apk_path.txt | head -1)
+          cp "$APK" insta-no-reels-${{ github.ref_name }}.apk
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          files: insta-no-reels-${{ github.ref_name }}.apk
           generate_release_notes: true
