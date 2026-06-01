@@ -8,8 +8,21 @@
     "assetBundlePatterns": [
       "**/*"
     ],
+    "updates": {
+      "url": "https://u.expo.dev/2fc4d41d-4b71-4336-ac89-33017bcfa4f6",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "android": {
       "package": "com.noreel.insta"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "2fc4d41d-4b71-4336-ac89-33017bcfa4f6"
+      }
     }
   }
 }
