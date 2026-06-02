@@ -49,7 +49,9 @@ const CONTENT_SCRIPT = `
   var reelsIconPos = null;
 
   function isOnSingleReel() {
-    if (window.location.pathname.indexOf('/reel/') === 0) return true;
+    var path = window.location.pathname;
+    if (path.indexOf('/reel/') === 0) return true;
+    if (path.indexOf('/stories/') === 0) return false;
     // DM modal: reel shown as fullscreen overlay without URL change
     var videos = document.querySelectorAll('video');
     for (var i = 0; i < videos.length; i++) {

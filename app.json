@@ -1,9 +1,10 @@
 {
   "expo": {
-    "name": "Insta No Reels",
-    "slug": "insta-no-reels",
+    "name": "NoSlop",
+    "slug": "noslop",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/slop.png",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": [
       "**/*"
