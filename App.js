@@ -2,6 +2,8 @@ import { StatusBar, setStatusBarStyle, setStatusBarBackgroundColor } from 'expo-
 import { View, StatusBar as RNStatusBar, Platform, BackHandler } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useRef, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import LandingScreen from './LandingScreen';
 
 const CONTENT_SCRIPT = `
 (function() {
@@ -186,16 +188,33 @@ const CONTENT_SCRIPT = `
       content = document.createElement('div');
       content.id = FEED_CONTENT_ID;
       document.body.appendChild(content);
+      if (!document.getElementById('noslop-blink-style') && document.head) {
+        var st = document.createElement('style');
+        st.id = 'noslop-blink-style';
+        st.textContent = '@keyframes noslopBlink{0%,100%{transform:scaleY(1)}40%{transform:scaleY(0.06)}70%{transform:scaleY(1)}}';
+        document.head.appendChild(st);
+      }
+      content.innerHTML = [
+        '<svg id="noslop-eye-svg" width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="' + iconStroke + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:8px;transform-origin:center;">',
+        '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>',
+        '<circle cx="12" cy="12" r="4"/>',
+        '<line x1="20" y1="3" x2="4" y2="21"/>',
+        '</svg>',
+        '<div style="font-size:14px;font-weight:600;color:' + titleColor + ';letter-spacing:-0.3px;">Focus mode</div>',
+        '<div style="font-size:11.5px;color:' + subtitleColor + ';text-align:center;max-width:190px;line-height:1.65;margin-top:3px;">The feed is hidden.</div>',
+      ].join('');
+      (function scheduleBlink() {
+        var delay = 3000 + Math.random() * 7000;
+        setTimeout(function() {
+          var svg = document.getElementById('noslop-eye-svg');
+          if (!svg) return;
+          svg.style.animation = 'none';
+          svg.getBoundingClientRect();
+          svg.style.animation = 'noslopBlink 0.4s ease-in-out';
+          scheduleBlink();
+        }, delay);
+      })();
     }
-    content.innerHTML = [
-      '<svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="' + iconStroke + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:8px;">',
-      '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>',
-      '<circle cx="12" cy="12" r="4"/>',
-      '<line x1="20" y1="3" x2="4" y2="21"/>',
-      '</svg>',
-      '<div style="font-size:14px;font-weight:600;color:' + titleColor + ';letter-spacing:-0.3px;">Focus mode</div>',
-      '<div style="font-size:11.5px;color:' + subtitleColor + ';text-align:center;max-width:190px;line-height:1.65;margin-top:3px;">The feed is hidden.</div>',
-    ].join('');
     content.style.cssText = 'position:fixed;z-index:2147483648;left:50%;top:' + contentY + 'px;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none;font-family:-apple-system,BlinkMacSystemFont,sans-serif;';
   }
 
@@ -369,6 +388,13 @@ export default function App() {
   const webViewRef = useRef(null);
   const [isDark, setIsDark] = useState(false);
   const canGoBackRef = useRef(false);
+  const [showLanding, setShowLanding] = useState(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('onboarding_done')
+      .then((val) => setShowLanding(val === null))
+      .catch(() => setShowLanding(false));
+  }, []);
 
   useEffect(() => {
     const handler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -380,6 +406,20 @@ export default function App() {
     });
     return () => handler.remove();
   }, []);
+
+  if (showLanding === null) return <View style={{ flex: 1, backgroundColor: '#0A0A0A' }} />;
+
+  if (showLanding) {
+    return (
+      <View style={{ flex: 1, paddingTop: STATUS_BAR_HEIGHT, backgroundColor: '#0A0A0A' }}>
+        <StatusBar style="light" />
+        <LandingScreen onDone={() => {
+          AsyncStorage.setItem('onboarding_done', '1');
+          setShowLanding(false);
+        }} />
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, paddingTop: STATUS_BAR_HEIGHT, backgroundColor: isDark ? 'rgb(12,16,20)' : '#fff' }}>

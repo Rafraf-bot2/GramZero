@@ -8,8 +8,14 @@
     "ios": "expo start --ios"
   },
   "dependencies": {
+    "@expo-google-fonts/dm-sans": "^0.4.2",
+    "@expo-google-fonts/space-grotesk": "^0.4.1",
+    "@react-native-async-storage/async-storage": "^3.1.1",
     "expo": "~54.0.0",
+    "expo-font": "^56.0.5",
+    "expo-localization": "^56.0.6",
     "expo-status-bar": "~3.0.9",
+    "expo-video": "~2.0.0",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-webview": "13.15.0"
